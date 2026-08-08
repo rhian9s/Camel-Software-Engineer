@@ -11,39 +11,10 @@ jobs:
           java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
-      - run: flutter create . --project-name camel_wallet --platforms=android --no-overwrite
-      - name: Fix sim_service
-        run: |
-          cat > lib/services/sim_service.dart << 'EOF'
-          import 'package:sim_data/sim_data.dart';
-          class SimInfo {
-            final String slot; final String carrier; final String number; final String balance; final String subId;
-            SimInfo({required this.slot, required this.carrier, required this.number, required this.balance, required this.subId});
-          }
-          class SimService {
-            Future<List<SimInfo>> getSims() async {
-              try {
-                var data = await SimDataPlugin.getSimData();
-                List<SimInfo> list = [];
-                for (var c in data.cards) {
-                  list.add(SimInfo(
-                    slot: "SIM ${(c.slotIndex?? 0) + 1}",
-                    carrier: c.carrierName?? "Unknown",
-                    number: c.displayName?? "",
-                    balance: "Loading...",
-                    subId: "${c.subscriptionId?? 0}"
-                  ));
-                }
-                return list;
-              } catch (e) {
-                return [];
-              }
-            }
-          }
-          EOF
+          flutter-version: '3.22.0'
+      - run: flutter create. --project-name camel_wallet --platforms=android --no-overwrite
       - run: flutter pub get
-      - run: flutter build apk --release --verbose
+      - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
           name: camel-wallet-apk
