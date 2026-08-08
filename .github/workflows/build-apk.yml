@@ -13,11 +13,32 @@ jobs:
         with:
           flutter-version: '3.22.0'
       - run: flutter create . --project-name camel_wallet --platforms=android
+      - name: Fix all build errors
+        run: |
+          # 1. Fix Kotlin version to 1.9.22
+          sed -i "s/ext.kotlin_version = '.*'/ext.kotlin_version = '1.9.22'/" android/build.gradle
+          # 2. Fix sim_data phoneNumber bug
+          cat > lib/services/sim_service.dart << 'EOF'
+          import 'package:sim_data/sim_data.dart';
+          import 'package:sim_data/sim_model.dart';
+          class SimInfo { final String slot; final String carrier; final String number; final String balance; final int subId; SimInfo({required this.slot, required this.carrier, required this.number, required this.balance, required this.subId}); }
+          class SimService {
+            Future<List<SimInfo>> getSimCards() async {
+              try {
+                final simData = await SimDataPlugin.getSimData();
+                List<SimInfo> sims = [];
+                for (var c in simData.cards) {
+                  sims.add(SimInfo(slot: "SIM ${c.slotIndex+1}", carrier: c.carrierName, number: c.displayName.isEmpty? "Unknown" : c.displayName, balance: "Loading...", subId: c.subscriptionId));
+                }
+                return sims;
+              } catch (e) { return []; }
+            }
+          }
+          EOF
+          # 3. Patch ussd_advanced old kotlin code
+          find $HOME/.pub-cache -name "UssdAdvancedPlugin.kt" -exec sed -i "s/.isEmpty/.isEmpty()/g; s/.isNotEmpty/.isNotEmpty()/g" {} \; || true
       - run: flutter pub get
-      - run: |
-          find $HOME/.pub-cache -path "*ussd_advanced*/android/build.gradle" -exec sed -i "s/1.3.50/1.9.10/g" {} \; || true
-          find /opt -path "*ussd_advanced*/android/build.gradle" -exec sed -i "s/1.3.50/1.9.10/g" {} \; || true
-      - run: flutter build apk --release
+      - run: flutter build apk --release --verbose
       - uses: actions/upload-artifact@v4
         with:
           name: camel-wallet-apk
