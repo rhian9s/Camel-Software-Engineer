@@ -12,9 +12,11 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.0'
-      - run: flutter pub get
       - run: flutter create . --project-name camel_wallet --platforms=android
       - run: flutter pub get
+      - run: |
+          find $HOME/.pub-cache -path "*ussd_advanced*/android/build.gradle" -exec sed -i "s/1.3.50/1.9.10/g" {} \; || true
+          find /opt -path "*ussd_advanced*/android/build.gradle" -exec sed -i "s/1.3.50/1.9.10/g" {} \; || true
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
