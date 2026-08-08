@@ -1,20 +1,39 @@
 import 'package:sim_data/sim_data.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:ussd_advanced/ussd_advanced.dart';
-class SimInfo { String slot, carrier, number, balance; int subId; SimInfo({required this.slot, required this.carrier, required this.number, required this.balance, required this.subId});}
+
+class SimInfoModel {
+  final String slot;
+  final String carrier;
+  final String number;
+  final String balance;
+  final int subId;
+
+  SimInfoModel(this.slot, {required this.carrier, required this.number, required this.balance, required this.subId});
+}
+
 class SimService {
-  static Future<List<SimInfo>> getLiveSims() async {
-    await [Permission.phone, Permission.sms].request();
+  Future<List<SimInfoModel>> getSimCards() async {
     try {
-      SimData data = await SimDataPlugin.getSimData();
-      List<SimInfo> sims = [];
-      for(var c in data.cards){
-        String carrier = c.carrierName.toUpperCase().contains("MTN")? "MTN Rwanda" : "Airtel Rwanda";
-        sims.add(SimInfo(slot:"SIM ${c.slotIndex+1}", carrier:carrier, number:c.phoneNumber.isEmpty? "07...": c.phoneNumber, balance:"Loading...", subId:c.subscriptionId));
+      final simData = await SimDataPlugin.getSimData();
+      List<SimInfoModel> sims = [];
+
+      for (var c in simData.cards) {
+        // FIX: c.phoneNumber doesn't exist -> use displayName / carrierName
+        String carrier = c.carrierName ?? "Unknown";
+        String number = c.displayName ?? "";
+        if (number.isEmpty) number = "07...";
+
+        sims.add(SimInfoModel(
+          "SIM ${(c.slotIndex ?? 0) + 1}",
+          carrier: carrier,
+          number: number,
+          balance: "Loading...",
+          subId: c.subscriptionId ?? 0,
+        ));
       }
       return sims;
-    } catch(e){
-      return [SimInfo(slot:"SIM 1", carrier:"MTN Rwanda", number:"0788...", balance:"45,230 RWF", subId:0)];
+    } catch (e) {
+      print("SIM Error: $e");
+      return [];
     }
   }
 }
