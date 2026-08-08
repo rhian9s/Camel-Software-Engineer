@@ -13,7 +13,7 @@ jobs:
         with:
           flutter-version: '3.22.0'
       - run: flutter pub get
-          - run: flutter create . --project-name camel_wallet --platforms=android
+      - run: flutter create . --project-name camel_wallet --platforms=android
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
