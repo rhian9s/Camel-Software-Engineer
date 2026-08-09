@@ -12,7 +12,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.0'
-      - run: flutter create. --project-name camel_wallet --platforms=android
+      - run: flutter create . --project-name camel_wallet --platforms=android
       - name: Fix Kotlin and Sim bug
         run: |
           sed -i "s/ext.kotlin_version = '.*'/ext.kotlin_version = '1.9.22'/" android/build.gradle
