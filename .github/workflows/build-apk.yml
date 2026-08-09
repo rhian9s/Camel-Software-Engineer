@@ -13,11 +13,14 @@ jobs:
         with:
           flutter-version: '3.22.0'
       - run: flutter create . --project-name camel_wallet --platforms=android
-      - name: Fix Android SDK versions
+      - name: Fix SDK versions
         run: |
           sed -i "s/ext.kotlin_version = '.*'/ext.kotlin_version = '1.9.22'/" android/build.gradle
-          sed -i "s/minSdkVersion 21/minSdkVersion 23/" android/app/build.gradle
-          sed -i "s/minSdk 21/minSdk 23/" android/app/build.gradle
+          sed -i "s/minSdkVersion.*/minSdkVersion 23/" android/app/build.gradle || true
+          sed -i "s/minSdk.*/minSdk 23/" android/app/build.gradle || true
+          sed -i "s/minSdkVersion 21/minSdkVersion 23/g" android/local.properties || echo "flutter.minSdkVersion=23" >> android/local.properties
+          echo "flutter.minSdkVersion=23" >> android/local.properties
+          cat android/app/build.gradle
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
