@@ -13,17 +13,56 @@ jobs:
         with:
           flutter-version: '3.22.0'
       - run: flutter create . --project-name camel_wallet --platforms=android
-      - name: Fix SDK versions
+      - name: Fix SDK + Add PRO USSD Engine
         run: |
           sed -i "s/ext.kotlin_version = '.*'/ext.kotlin_version = '1.9.22'/" android/build.gradle
           sed -i "s/minSdkVersion.*/minSdkVersion 23/" android/app/build.gradle || true
           sed -i "s/minSdk.*/minSdk 23/" android/app/build.gradle || true
-          sed -i "s/minSdkVersion 21/minSdkVersion 23/g" android/local.properties || echo "flutter.minSdkVersion=23" >> android/local.properties
           echo "flutter.minSdkVersion=23" >> android/local.properties
-          cat android/app/build.gradle
+          mkdir -p android/app/src/main/kotlin/com/example/camel_wallet
+          cat > android/app/src/main/kotlin/com/example/camel_wallet/MainActivity.kt << 'KOT'
+          package com.example.camel_wallet
+          import android.Manifest
+          import android.content.pm.PackageManager
+          import android.os.Build
+          import android.telephony.TelephonyManager
+          import androidx.core.app.ActivityCompat
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          class MainActivity: FlutterActivity() {
+              private val CHANNEL = "camel_wallet/ussd"
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+                      if (call.method == "sendUssd") {
+                          val code = call.argument<String>("code")!!
+                          val subId = call.argument<Int>("subId")?: 0
+                          sendUssd(code, subId, result)
+                      } else result.notImplemented()
+                  }
+              }
+              private fun sendUssd(ussdCode: String, subId: Int, result: MethodChannel.Result) {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)!= PackageManager.PERMISSION_GRANTED) {
+                          result.error("PERMISSION", "No permission", null); return
+                      }
+                      try {
+                          val tm = getSystemService(TelephonyManager::class.java)
+                          val tmSub = tm.createForSubscriptionId(subId)
+                          tmSub.sendUssdRequest(ussdCode, object : TelephonyManager.UssdResponseCallback() {
+                              override fun onReceiveUssdResponse(tm: TelephonyManager, req: String, resp: CharSequence) { result.success(resp.toString()) }
+                              override fun onReceiveUssdResponseFailed(tm: TelephonyManager, req: String, failCode: Int) { result.error("USSD_FAILED", "Failed $failCode", null) }
+                          }, null)
+                      } catch (e: Exception) { result.error("EXCEPTION", e.message, null) }
+                  } else result.error("UNSUPPORTED", "Android < 8", null)
+              }
+          }
+          KOT
+          cat android/app/src/main/kotlin/com/example/camel_wallet/MainActivity.kt
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with:
-          name: camel-wallet-apk
+          name: camel-wallet-pro-apk
           path: build/app/outputs/flutter-apk/app-release.apk
