@@ -12,7 +12,25 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.22.0'
-      - run: flutter create . --project-name camel_wallet --platforms=android --no-overwrite
+      - run: flutter create. --project-name camel_wallet --platforms=android
+      - name: Fix Kotlin and Sim bug
+        run: |
+          sed -i "s/ext.kotlin_version = '.*'/ext.kotlin_version = '1.9.22'/" android/build.gradle
+          cat > lib/services/sim_service.dart << 'EOF'
+          import 'package:sim_data/sim_data.dart';
+          class SimInfoModel {
+            final String slot; final String carrier; final String number; final String balance; final int subId;
+            SimInfoModel(this.slot, {required this.carrier, required this.number, required this.balance, required this.subId});
+          }
+          class SimService {
+            Future<List<SimInfoModel>> getSimCards() async {
+              try {
+                var d = await SimDataPlugin.getSimData();
+                return d.cards.map((c) => SimInfoModel("SIM ${(c.slotIndex??0)+1}", carrier: c.carrierName??"Unknown", number: c.displayName??"07...", balance: "Loading...", subId: c.subscriptionId??0)).toList();
+              } catch(e){ return []; }
+            }
+          }
+          EOF
       - run: flutter pub get
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
