@@ -1,28 +1,29 @@
-import 'package:permission_handler/permission_handler.dart';
+import 'package:sim_data/sim_data.dart';
 
 class SimInfo {
   final String slot;
   final String carrier;
   final String number;
-  final String balance;
   final int subId;
-  SimInfo(this.slot, {required this.carrier, required this.number, required this.balance, required this.subId});
+  SimInfo(this.slot, {required this.carrier, required this.number, required this.subId});
 }
-
-typedef SimInfoModel = SimInfo;
 
 class SimService {
   static Future<List<SimInfo>> getLiveSims() async {
-    await Permission.phone.request();
-    return [
-      SimInfo("SIM 1", carrier: "MTN Rwanda", number: "078...", balance: "Check", subId: 0),
-      SimInfo("SIM 2", carrier: "Airtel Rwanda", number: "073...", balance: "Check", subId: 1),
-    ];
+    try {
+      var data = await SimDataPlugin.getSimData();
+      List<SimInfo> list = [];
+      for (var card in data.cards) {
+        list.add(SimInfo(
+          "SIM ${card.slotIndex + 1}",
+          carrier: card.carrierName.isEmpty? "MTN Rwanda" : card.carrierName,
+          number: card.displayName,
+          subId: card.subscriptionId,
+        ));
+      }
+      return list;
+    } catch (e) {
+      return [];
+    }
   }
-  
-  static Future<List<SimInfo>> getSimCards() => getLiveSims();
-  static Future<List<SimInfo>> getSims() => getLiveSims();
-  
-  // Instance versions too for compatibility
-  Future<List<SimInfo>> getLiveSimsInstance() => getLiveSims();
 }
