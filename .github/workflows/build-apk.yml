@@ -13,12 +13,20 @@ jobs:
         with:
           flutter-version: '3.22.0'
       - run: flutter create . --project-name camel_wallet --platforms=android
+
       - name: Fix SDK + Add PRO USSD Engine
         run: |
           sed -i "s/ext.kotlin_version = '.*'/ext.kotlin_version = '1.9.22'/" android/build.gradle
           sed -i "s/minSdkVersion.*/minSdkVersion 23/" android/app/build.gradle || true
           sed -i "s/minSdk.*/minSdk 23/" android/app/build.gradle || true
           echo "flutter.minSdkVersion=23" >> android/local.properties
+
+          # Add permissions to Manifest
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          grep -q "CALL_PHONE" $MANIFEST || sed -i 's/<manifest.*>/&\n <uses-permission android:name="android.permission.CALL_PHONE" \/>/' $MANIFEST
+          grep -q "READ_PHONE_STATE" $MANIFEST || sed -i 's/<manifest.*>/&\n <uses-permission android:name="android.permission.READ_PHONE_STATE" \/>/' $MANIFEST
+
+          # Create PRO MainActivity
           mkdir -p android/app/src/main/kotlin/com/example/camel_wallet
           cat > android/app/src/main/kotlin/com/example/camel_wallet/MainActivity.kt << 'KOT'
           package com.example.camel_wallet
@@ -27,41 +35,60 @@ jobs:
           import android.os.Build
           import android.telephony.TelephonyManager
           import androidx.core.app.ActivityCompat
+          import androidx.core.content.ContextCompat
           import io.flutter.embedding.android.FlutterActivity
           import io.flutter.embedding.engine.FlutterEngine
           import io.flutter.plugin.common.MethodChannel
+
           class MainActivity: FlutterActivity() {
               private val CHANNEL = "camel_wallet/ussd"
+
               override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
                   super.configureFlutterEngine(flutterEngine)
                   MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
                       if (call.method == "sendUssd") {
                           val code = call.argument<String>("code")!!
                           val subId = call.argument<Int>("subId")?: 0
+
+                          if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)!= PackageManager.PERMISSION_GRANTED) {
+                              ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CALL_PHONE, Manifest.permission.READ_PHONE_STATE), 101)
+                              result.error("PERMISSION", "Tap Check again after allowing", null)
+                              return@setMethodCallHandler
+                          }
                           sendUssd(code, subId, result)
-                      } else result.notImplemented()
+                      } else {
+                          result.notImplemented()
+                      }
                   }
               }
+
               private fun sendUssd(ussdCode: String, subId: Int, result: MethodChannel.Result) {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)!= PackageManager.PERMISSION_GRANTED) {
-                          result.error("PERMISSION", "No permission", null); return
-                      }
-                      try {
+                  try {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                           val tm = getSystemService(TelephonyManager::class.java)
-                          val tmSub = tm.createForSubscriptionId(subId)
+                          val tmSub = if (subId!= 0) tm.createForSubscriptionId(subId) else tm
+
                           tmSub.sendUssdRequest(ussdCode, object : TelephonyManager.UssdResponseCallback() {
-                              override fun onReceiveUssdResponse(tm: TelephonyManager, req: String, resp: CharSequence) { result.success(resp.toString()) }
-                              override fun onReceiveUssdResponseFailed(tm: TelephonyManager, req: String, failCode: Int) { result.error("USSD_FAILED", "Failed $failCode", null) }
+                              override fun onReceiveUssdResponse(tm: TelephonyManager, request: String, response: CharSequence) {
+                                  runOnUiThread { result.success(response.toString()) }
+                              }
+                              override fun onReceiveUssdResponseFailed(tm: TelephonyManager, request: String, failureCode: Int) {
+                                  runOnUiThread { result.error("USSD_FAILED", "Failed code $failureCode", null) }
+                              }
                           }, null)
-                      } catch (e: Exception) { result.error("EXCEPTION", e.message, null) }
-                  } else result.error("UNSUPPORTED", "Android < 8", null)
+                      } else {
+                          result.error("UNSUPPORTED", "Need Android 8+", null)
+                      }
+                  } catch (e: Exception) {
+                      result.error("EXCEPTION", e.message, null)
+                  }
               }
           }
           KOT
-          cat android/app/src/main/kotlin/com/example/camel_wallet/MainActivity.kt
+
       - run: flutter pub get
       - run: flutter build apk --release
+
       - uses: actions/upload-artifact@v4
         with:
           name: camel-wallet-pro-apk
