@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/sim_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,9 +26,17 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: Text("${sim.carrier} Balance"),
-        content: Text("Dial this USSD:\n\n$code\n\non SIM ${sim.slot}\n\nTap OK to open dialer"),
+        content: Text("Dial:\n\n$code"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK")),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final uri = Uri(scheme: 'tel', path: code);
+              await launchUrl(uri);
+            },
+            child: const Text("Dial Now"),
+          ),
         ],
       ),
     );
